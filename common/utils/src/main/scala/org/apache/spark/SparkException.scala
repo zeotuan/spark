@@ -562,3 +562,16 @@ private[spark] class SparkSQLFeatureNotSupportedException(
 
   override def getErrorClass: String = errorClass
 }
+
+/**
+ * Spark assertion exception thrown from Spark with an error class
+ */
+private[spark] class SparkAssertionException(
+                                                           errorClass: String,
+                                                           messageParameters: Map[String, String])
+  extends SparkException(SparkThrowableHelper.getMessage(errorClass, messageParameters))
+    with SparkThrowable {
+  override def getMessageParameters: java.util.Map[String, String] = messageParameters.asJava
+
+  override def getErrorClass: String = errorClass
+}
