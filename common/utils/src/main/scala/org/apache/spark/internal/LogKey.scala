@@ -26,8 +26,8 @@ trait LogKey {
 }
 
 /**
- * Various keys used for mapped diagnostic contexts(MDC) in logging.
- * All structured logging keys should be defined here for standardization.
+ * Various keys used for mapped diagnostic contexts(MDC) in logging. All structured logging keys
+ * should be defined here for standardization.
  */
 object LogKeys {
   case object ACCUMULATOR_ID extends LogKey

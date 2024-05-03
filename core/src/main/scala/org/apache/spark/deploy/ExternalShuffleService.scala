@@ -36,15 +36,16 @@ import org.apache.spark.network.util.TransportConf
 import org.apache.spark.util.{ShutdownHookManager, Utils}
 
 /**
- * Provides a server from which Executors can read shuffle files (rather than reading directly from
- * each other), to provide uninterrupted access to the files in the face of executors being turned
- * off or killed.
+ * Provides a server from which Executors can read shuffle files (rather than reading directly
+ * from each other), to provide uninterrupted access to the files in the face of executors being
+ * turned off or killed.
  *
  * Optionally requires SASL authentication in order to read. See [[SecurityManager]].
  */
-private[deploy]
-class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityManager)
-  extends Logging {
+private[deploy] class ExternalShuffleService(
+    sparkConf: SparkConf,
+    securityManager: SecurityManager)
+    extends Logging {
   protected val masterMetricsSystem =
     MetricsSystem.createMetricsSystem(MetricsSystemInstances.SHUFFLE_SERVICE, sparkConf)
 
@@ -71,13 +72,14 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
     if (localDirs.length >= 1) {
       new File(localDirs.find(new File(_, dbName).exists()).getOrElse(localDirs(0)), dbName)
     } else {
-      logWarning(s"'spark.local.dir' should be set first when we use db in " +
-        s"ExternalShuffleService. Note that this only affects standalone mode.")
+      logWarning(
+        s"'spark.local.dir' should be set first when we use db in " +
+          s"ExternalShuffleService. Note that this only affects standalone mode.")
       null
     }
   }
 
-  /** Get blockhandler  */
+  /** Get blockhandler */
   def getBlockHandler: ExternalBlockHandler = {
     blockHandler
   }
@@ -87,9 +89,11 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
     if (sparkConf.get(config.SHUFFLE_SERVICE_DB_ENABLED) && enabled) {
       val shuffleDBName = sparkConf.get(config.SHUFFLE_SERVICE_DB_BACKEND)
       val dbBackend = DBBackend.byName(shuffleDBName)
-      logInfo(log"Use ${MDC(SHUFFLE_DB_BACKEND_NAME, dbBackend.name())} as the implementation of " +
-        log"${MDC(SHUFFLE_DB_BACKEND_KEY, config.SHUFFLE_SERVICE_DB_BACKEND.key)}")
-      new ExternalBlockHandler(conf,
+      logInfo(
+        log"Use ${MDC(SHUFFLE_DB_BACKEND_NAME, dbBackend.name())} as the implementation of " +
+          log"${MDC(SHUFFLE_DB_BACKEND_KEY, config.SHUFFLE_SERVICE_DB_BACKEND.key)}")
+      new ExternalBlockHandler(
+        conf,
         findRegisteredExecutorsDBFile(dbBackend.fileName(registeredExecutorsDB)))
     } else {
       new ExternalBlockHandler(conf, null)
@@ -107,8 +111,9 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
   def start(): Unit = {
     require(server == null, "Shuffle server already started")
     val authEnabled = securityManager.isAuthenticationEnabled()
-    logInfo(log"Starting shuffle service on port ${MDC(PORT, port)}" +
-      log" (auth enabled = ${MDC(AUTH_ENABLED, authEnabled)})")
+    logInfo(
+      log"Starting shuffle service on port ${MDC(PORT, port)}" +
+        log" (auth enabled = ${MDC(AUTH_ENABLED, authEnabled)})")
     val bootstraps: Seq[TransportServerBootstrap] =
       if (authEnabled) {
         Seq(new AuthServerBootstrap(transportConf, securityManager))
@@ -119,8 +124,8 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
     server = transportContext.createServer(port, bootstraps.asJava)
 
     shuffleServiceSource.registerMetricSet(server.getAllMetrics)
-    blockHandler.getAllMetrics.getMetrics.put("numRegisteredConnections",
-        server.getRegisteredConnections)
+    blockHandler.getAllMetrics.getMetrics
+      .put("numRegisteredConnections", server.getRegisteredConnections)
     shuffleServiceSource.registerMetricSet(blockHandler.getAllMetrics)
     masterMetricsSystem.registerSource(shuffleServiceSource)
     masterMetricsSystem.start()
@@ -128,7 +133,7 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana
 
   /** Clean up all shuffle files associated with an application that has exited. */
   def applicationRemoved(appId: String): Unit = {
-    blockHandler.applicationRemoved(appId, true /* cleanupLocalDirs */)
+    blockHandler.applicationRemoved(appId, true /* cleanupLocalDirs */ )
   }
 
   /** Clean up all the non-shuffle files associated with an executor that has exited. */

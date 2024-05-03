@@ -127,7 +127,8 @@ private[spark] object PythonUtils extends Logging {
 
       val processPythonVer = Process(pythonVersionCMD, None, environment.toSeq: _*)
       val output = runCommand(processPythonVer)
-      logInfo(log"Python version: ${MDC(PYTHON_VERSION, output.getOrElse("Unable to determine"))}")
+      logInfo(
+        log"Python version: ${MDC(PYTHON_VERSION, output.getOrElse("Unable to determine"))}")
 
       val pythonCode =
         """
@@ -154,8 +155,8 @@ private[spark] object PythonUtils extends Logging {
   // Only for testing.
   private[spark] var additionalTestingPath: Option[String] = None
 
-  private[spark] val defaultPythonExec: String = sys.env.getOrElse(
-    "PYSPARK_DRIVER_PYTHON", sys.env.getOrElse("PYSPARK_PYTHON", "python3"))
+  private[spark] val defaultPythonExec: String =
+    sys.env.getOrElse("PYSPARK_DRIVER_PYTHON", sys.env.getOrElse("PYSPARK_PYTHON", "python3"))
 
   private[spark] def createPythonFunction(command: Array[Byte]): SimplePythonFunction = {
     val sourcePython = if (Utils.isTesting) {
@@ -168,16 +169,16 @@ private[spark] object PythonUtils extends Logging {
         sys.props.getOrElse("spark.test.home", sys.env("SPARK_HOME"))
       }
       val sourcePath = Paths.get(sparkHome, "python").toAbsolutePath
-      val py4jPath = Paths.get(
-        sparkHome, "python", "lib", PythonUtils.PY4J_ZIP_NAME).toAbsolutePath
+      val py4jPath =
+        Paths.get(sparkHome, "python", "lib", PythonUtils.PY4J_ZIP_NAME).toAbsolutePath
       val merged = mergePythonPaths(sourcePath.toString, py4jPath.toString)
       // Adds a additional path to search Python packages for testing.
       additionalTestingPath.map(mergePythonPaths(_, merged)).getOrElse(merged)
     } else {
       PythonUtils.sparkPythonPath
     }
-    val pythonPath = PythonUtils.mergePythonPaths(
-      sourcePython, sys.env.getOrElse("PYTHONPATH", ""))
+    val pythonPath =
+      PythonUtils.mergePythonPaths(sourcePython, sys.env.getOrElse("PYTHONPATH", ""))
 
     val pythonVer: String =
       Process(

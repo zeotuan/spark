@@ -41,8 +41,8 @@ import org.apache.spark.util.{SerializableConfiguration, Utils}
 private[spark] class ReliableCheckpointRDD[T: ClassTag](
     sc: SparkContext,
     val checkpointPath: String,
-    _partitioner: Option[Partitioner] = None
-  ) extends CheckpointRDD[T](sc) {
+    _partitioner: Option[Partitioner] = None)
+    extends CheckpointRDD[T](sc) {
 
   @transient private val hadoopConf = sc.hadoopConfiguration
   @transient private val cpath = new Path(checkpointPath)
@@ -66,13 +66,14 @@ private[spark] class ReliableCheckpointRDD[T: ClassTag](
   /**
    * Return partitions described by the files in the checkpoint directory.
    *
-   * Since the original RDD may belong to a prior application, there is no way to know a
-   * priori the number of partitions to expect. This method assumes that the original set of
-   * checkpoint files are fully preserved in a reliable storage across application lifespans.
+   * Since the original RDD may belong to a prior application, there is no way to know a priori
+   * the number of partitions to expect. This method assumes that the original set of checkpoint
+   * files are fully preserved in a reliable storage across application lifespans.
    */
   protected override def getPartitions: Array[Partition] = {
     // listStatus can throw exception if path does not exist.
-    val inputFiles = fs.listStatus(cpath)
+    val inputFiles = fs
+      .listStatus(cpath)
       .map(_.getPath)
       .filter(_.getName.startsWith("part-"))
       .sortBy(_.getName.stripPrefix("part-").toInt)
@@ -86,16 +87,16 @@ private[spark] class ReliableCheckpointRDD[T: ClassTag](
   }
 
   // Cache of preferred locations of checkpointed files.
-  @transient private[spark] lazy val cachedPreferredLocations = CacheBuilder.newBuilder()
+  @transient private[spark] lazy val cachedPreferredLocations = CacheBuilder
+    .newBuilder()
     .expireAfterWrite(
       SparkEnv.get.conf.get(CACHE_CHECKPOINT_PREFERRED_LOCS_EXPIRE_TIME).get,
       TimeUnit.MINUTES)
-    .build(
-      new CacheLoader[Partition, Seq[String]]() {
-        override def load(split: Partition): Seq[String] = {
-          getPartitionBlockLocations(split)
-        }
-      })
+    .build(new CacheLoader[Partition, Seq[String]]() {
+      override def load(split: Partition): Seq[String] = {
+        getPartitionBlockLocations(split)
+      }
+    })
 
   // Returns the block locations of given partition on file system.
   private def getPartitionBlockLocations(split: Partition): Seq[String] = {
@@ -161,10 +162,10 @@ private[spark] object ReliableCheckpointRDD extends Logging {
     }
 
     // Save to file, and reload it as an RDD
-    val broadcastedConf = sc.broadcast(
-      new SerializableConfiguration(sc.hadoopConfiguration))
+    val broadcastedConf = sc.broadcast(new SerializableConfiguration(sc.hadoopConfiguration))
     // TODO: This is expensive because it computes the RDD again unnecessarily (SPARK-8582)
-    sc.runJob(originalRDD,
+    sc.runJob(
+      originalRDD,
       writePartitionToCheckpointFile[T](checkpointDirPath.toString, broadcastedConf) _)
 
     if (originalRDD.partitioner.nonEmpty) {
@@ -175,11 +176,14 @@ private[spark] object ReliableCheckpointRDD extends Logging {
       TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - checkpointStartTimeNs)
     logInfo(log"Checkpointing took ${MDC(TOTAL_TIME, checkpointDurationMs)} ms.")
 
-    val newRDD = new ReliableCheckpointRDD[T](
-      sc, checkpointDirPath.toString, originalRDD.partitioner)
+    val newRDD =
+      new ReliableCheckpointRDD[T](sc, checkpointDirPath.toString, originalRDD.partitioner)
     if (newRDD.partitions.length != originalRDD.partitions.length) {
       throw SparkCoreErrors.checkpointRDDHasDifferentNumberOfPartitionsFromOriginalRDDError(
-        originalRDD.id, originalRDD.partitions.length, newRDD.id, newRDD.partitions.length)
+        originalRDD.id,
+        originalRDD.partitions.length,
+        newRDD.id,
+        newRDD.partitions.length)
     }
     newRDD
   }
@@ -210,21 +214,27 @@ private[spark] object ReliableCheckpointRDD extends Logging {
       }
     } else {
       // This is mainly for testing purpose
-      fs.create(tempOutputPath, false, bufferSize,
-        fs.getDefaultReplication(fs.getWorkingDirectory), blockSize)
+      fs.create(
+        tempOutputPath,
+        false,
+        bufferSize,
+        fs.getDefaultReplication(fs.getWorkingDirectory),
+        blockSize)
     }
     val serializer = env.serializer.newInstance()
     val serializeStream = serializer.serializeStream(fileOutputStream)
     Utils.tryWithSafeFinallyAndFailureCallbacks {
       serializeStream.writeAll(iterator)
-    } (catchBlock = {
-      val deleted = fs.delete(tempOutputPath, false)
-      if (!deleted) {
-        logInfo(log"Failed to delete tempOutputPath ${MDC(TEMP_OUTPUT_PATH, tempOutputPath)}.")
-      }
-    }, finallyBlock = {
-      serializeStream.close()
-    })
+    }(
+      catchBlock = {
+        val deleted = fs.delete(tempOutputPath, false)
+        if (!deleted) {
+          logInfo(log"Failed to delete tempOutputPath ${MDC(TEMP_OUTPUT_PATH, tempOutputPath)}.")
+        }
+      },
+      finallyBlock = {
+        serializeStream.close()
+      })
 
     if (!fs.rename(tempOutputPath, finalOutputPath)) {
       if (!fs.exists(finalOutputPath)) {
@@ -233,8 +243,9 @@ private[spark] object ReliableCheckpointRDD extends Logging {
         throw SparkCoreErrors.checkpointFailedToSaveError(ctx.attemptNumber(), finalOutputPath)
       } else {
         // Some other copy of this task must've finished before us and renamed it
-        logInfo(log"Final output path" +
-          log" ${MDC(FINAL_OUTPUT_PATH, finalOutputPath)} already exists; not overwriting it")
+        logInfo(
+          log"Final output path" +
+            log" ${MDC(FINAL_OUTPUT_PATH, finalOutputPath)} already exists; not overwriting it")
         if (!fs.delete(tempOutputPath, false)) {
           logWarning(s"Error deleting ${tempOutputPath}")
         }
@@ -247,7 +258,9 @@ private[spark] object ReliableCheckpointRDD extends Logging {
    * basis; any exception while writing the partitioner is caught, logged and ignored.
    */
   private def writePartitionerToCheckpointDir(
-    sc: SparkContext, partitioner: Partitioner, checkpointDirPath: Path): Unit = {
+      sc: SparkContext,
+      partitioner: Partitioner,
+      checkpointDirPath: Path): Unit = {
     try {
       val partitionerFilePath = new Path(checkpointDirPath, checkpointPartitionerFileName())
       val bufferSize = sc.conf.get(BUFFER_SIZE)
@@ -267,11 +280,9 @@ private[spark] object ReliableCheckpointRDD extends Logging {
     }
   }
 
-
   /**
-   * Read a partitioner from the given RDD checkpoint directory, if it exists.
-   * This is done on a best-effort basis; any exception while reading the partitioner is
-   * caught, logged and ignored.
+   * Read a partitioner from the given RDD checkpoint directory, if it exists. This is done on a
+   * best-effort basis; any exception while reading the partitioner is caught, logged and ignored.
    */
   private def readCheckpointedPartitionerFile(
       sc: SparkContext,
@@ -300,8 +311,10 @@ private[spark] object ReliableCheckpointRDD extends Logging {
         logDebug("No partitioner file", e)
         None
       case NonFatal(e) =>
-        logWarning(s"Error reading partitioner from $checkpointDirPath, " +
-            s"partitioner will not be recovered which may lead to performance loss", e)
+        logWarning(
+          s"Error reading partitioner from $checkpointDirPath, " +
+            s"partitioner will not be recovered which may lead to performance loss",
+          e)
         None
     }
   }

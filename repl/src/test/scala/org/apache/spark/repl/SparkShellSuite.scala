@@ -31,17 +31,21 @@ import org.apache.spark.internal.MDC
 import org.apache.spark.util.ThreadUtils
 
 class SparkShellSuite extends SparkFunSuite {
+
   /**
    * Run a spark-shell operation and expect all the script and expected answers to be returned.
    * This method refers to [[runCliWithin()]] method in [[CliSuite]].
    *
-   * @param timeout maximum time for the commands to complete
-   * @param extraArgs any extra arguments
-   * @param errorResponses a sequence of strings whose presence in the stdout of the forked process
-   *                       is taken as an immediate error condition. That is: if a line containing
-   *                       with one of these strings is found, fail the test immediately.
-   *                       The default value is `Seq("Error:")`
-   * @param scriptsAndExpectedAnswers one or more tuples of query + answer
+   * @param timeout
+   *   maximum time for the commands to complete
+   * @param extraArgs
+   *   any extra arguments
+   * @param errorResponses
+   *   a sequence of strings whose presence in the stdout of the forked process is taken as an
+   *   immediate error condition. That is: if a line containing with one of these strings is
+   *   found, fail the test immediately. The default value is `Seq("Error:")`
+   * @param scriptsAndExpectedAnswers
+   *   one or more tuples of query + answer
    */
   def runInterpreter(
       timeout: FiniteDuration,
@@ -50,9 +54,8 @@ class SparkShellSuite extends SparkFunSuite {
       scriptsAndExpectedAnswers: (String, String)*): Unit = {
 
     val scripts = scriptsAndExpectedAnswers.map(_._1 + "\n").mkString
-    val expectedAnswers = scriptsAndExpectedAnswers.flatMap {
-      case (_, answer) =>
-        Seq(answer)
+    val expectedAnswers = scriptsAndExpectedAnswers.flatMap { case (_, answer) =>
+      Seq(answer)
     }
 
     val command = {
@@ -81,9 +84,10 @@ class SparkShellSuite extends SparkFunSuite {
 
       // If we haven't found all expected answers and another expected answer comes up...
       if (next < expectedAnswers.size && line.contains(expectedAnswers(next))) {
-        logInfo(log"${MDC(STREAM_SOURCE, source)}> found expected" +
-          log" output line ${MDC(OUTPUT_LINE_NUMBER, next)}:" +
-          log" '${MDC(EXPECTED_ANSWER, expectedAnswers(next))}'")
+        logInfo(
+          log"${MDC(STREAM_SOURCE, source)}> found expected" +
+            log" output line ${MDC(OUTPUT_LINE_NUMBER, next)}:" +
+            log" '${MDC(EXPECTED_ANSWER, expectedAnswers(next))}'")
         next += 1
         // If all expected answers have been found...
         if (next == expectedAnswers.size) {
@@ -123,9 +127,10 @@ class SparkShellSuite extends SparkFunSuite {
       }
       ThreadUtils.awaitResult(foundAllExpectedAnswers.future, timeoutForQuery)
       log.info("Found all expected output.")
-    } catch { case cause: Throwable =>
-      val message =
-        s"""
+    } catch {
+      case cause: Throwable =>
+        val message =
+          s"""
            |=======================
            |SparkShellSuite failure output
            |=======================
@@ -138,8 +143,8 @@ class SparkShellSuite extends SparkFunSuite {
            |End SparkShellSuite failure output
            |===========================
          """.stripMargin
-      logError(message, cause)
-      fail(message, cause)
+        logError(message, cause)
+        fail(message, cause)
     } finally {
       if (!process.waitFor(1, MINUTES)) {
         try {
@@ -152,14 +157,12 @@ class SparkShellSuite extends SparkFunSuite {
   }
 
   test("SPARK-37058: Add command line unit test for spark-shell") {
-    runInterpreter(2.minute, Seq.empty)(
-      """
+    runInterpreter(2.minute, Seq.empty)("""
         |spark.sql("drop table if exists t_37058")
       """.stripMargin -> "res0: org.apache.spark.sql.DataFrame = []")
   }
 
   test("SPARK-37058: Add command line unit test for spark-shell with --verbose") {
-    runInterpreter(2.minute, Seq("--verbose"))(
-      "".stripMargin -> "org.apache.spark.repl.Main")
+    runInterpreter(2.minute, Seq("--verbose"))("".stripMargin -> "org.apache.spark.repl.Main")
   }
 }

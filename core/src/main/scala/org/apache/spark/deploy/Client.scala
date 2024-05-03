@@ -50,28 +50,30 @@ private class ClientEndpoint(
     driverArgs: ClientArguments,
     masterEndpoints: Seq[RpcEndpointRef],
     conf: SparkConf)
-  extends ThreadSafeRpcEndpoint with Logging {
+    extends ThreadSafeRpcEndpoint
+    with Logging {
 
   // A scheduled executor used to send messages at the specified time.
   private val forwardMessageThread =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("client-forward-message")
   // Used to provide the implicit parameter of `Future` methods.
   private val forwardMessageExecutionContext =
-    ExecutionContext.fromExecutor(forwardMessageThread,
-      t => t match {
-        case ie: InterruptedException => // Exit normally
-        case e: Throwable =>
-          logError(log"${MDC(ERROR, e.getMessage)}", e)
-          System.exit(SparkExitCode.UNCAUGHT_EXCEPTION)
-      })
+    ExecutionContext.fromExecutor(
+      forwardMessageThread,
+      t =>
+        t match {
+          case ie: InterruptedException => // Exit normally
+          case e: Throwable =>
+            logError(log"${MDC(ERROR, e.getMessage)}", e)
+            System.exit(SparkExitCode.UNCAUGHT_EXCEPTION)
+        })
 
-   private val lostMasters = new HashSet[RpcAddress]
-   private var activeMasterEndpoint: RpcEndpointRef = null
-   private val waitAppCompletion = conf.get(config.STANDALONE_SUBMIT_WAIT_APP_COMPLETION)
-   private val REPORT_DRIVER_STATUS_INTERVAL = 10000
-   private var submittedDriverID = ""
-   private var driverStatusReported = false
-
+  private val lostMasters = new HashSet[RpcAddress]
+  private var activeMasterEndpoint: RpcEndpointRef = null
+  private val waitAppCompletion = conf.get(config.STANDALONE_SUBMIT_WAIT_APP_COMPLETION)
+  private val REPORT_DRIVER_STATUS_INTERVAL = 10000
+  private var submittedDriverID = ""
+  private var driverStatusReported = false
 
   private def getProperty(key: String, conf: SparkConf): Option[String] = {
     sys.props.get(key).orElse(conf.getOption(key))
@@ -97,15 +99,20 @@ private class ClientEndpoint(
 
         val extraJavaOptsConf = config.DRIVER_JAVA_OPTIONS.key
         val extraJavaOpts = getProperty(extraJavaOptsConf, conf)
-          .map(Utils.splitCommandString).getOrElse(Seq.empty)
+          .map(Utils.splitCommandString)
+          .getOrElse(Seq.empty)
 
         val sparkJavaOpts = Utils.sparkJavaOpts(conf)
         val javaOpts = sparkJavaOpts ++ extraJavaOpts
-        val command = new Command(mainClass,
+        val command = new Command(
+          mainClass,
           Seq("{{WORKER_URL}}", "{{USER_JAR}}", driverArgs.mainClass) ++ driverArgs.driverOptions,
-          sys.env, classPathEntries, libraryPathEntries, javaOpts)
-        val driverResourceReqs = ResourceUtils.parseResourceRequirements(conf,
-          config.SPARK_DRIVER_PREFIX)
+          sys.env,
+          classPathEntries,
+          libraryPathEntries,
+          javaOpts)
+        val driverResourceReqs =
+          ResourceUtils.parseResourceRequirements(conf, config.SPARK_DRIVER_PREFIX)
         val driverDescription = new DriverDescription(
           driverArgs.jarUrl,
           driverArgs.memory,
@@ -122,9 +129,14 @@ private class ClientEndpoint(
         asyncSendToMasterAndForwardReply[KillDriverResponse](RequestKillDriver(driverId))
     }
     logInfo("... waiting before polling master for driver state")
-    forwardMessageThread.scheduleAtFixedRate(() => Utils.tryLogNonFatalError {
-      monitorDriverStatus()
-    }, 5000, REPORT_DRIVER_STATUS_INTERVAL, TimeUnit.MILLISECONDS)
+    forwardMessageThread.scheduleAtFixedRate(
+      () =>
+        Utils.tryLogNonFatalError {
+          monitorDriverStatus()
+        },
+      5000,
+      REPORT_DRIVER_STATUS_INTERVAL,
+      TimeUnit.MILLISECONDS)
   }
 
   /**
@@ -132,24 +144,26 @@ private class ClientEndpoint(
    */
   private def asyncSendToMasterAndForwardReply[T: ClassTag](message: Any): Unit = {
     for (masterEndpoint <- masterEndpoints) {
-      masterEndpoint.ask[T](message).onComplete {
-        case Success(v) => self.send(v)
-        case Failure(e) =>
-          logWarning(s"Error sending messages to master $masterEndpoint", e)
-      }(forwardMessageExecutionContext)
+      masterEndpoint
+        .ask[T](message)
+        .onComplete {
+          case Success(v) => self.send(v)
+          case Failure(e) =>
+            logWarning(s"Error sending messages to master $masterEndpoint", e)
+        }(forwardMessageExecutionContext)
     }
   }
 
   private def monitorDriverStatus(): Unit = {
     if (submittedDriverID != "") {
-      asyncSendToMasterAndForwardReply[DriverStatusResponse](RequestDriverStatus(submittedDriverID))
+      asyncSendToMasterAndForwardReply[DriverStatusResponse](
+        RequestDriverStatus(submittedDriverID))
     }
   }
 
   /**
-   * Processes and reports the driver status then exit the JVM if the
-   * waitAppCompletion is set to false, else reports the driver status
-   * if debug logs are enabled.
+   * Processes and reports the driver status then exit the JVM if the waitAppCompletion is set to
+   * false, else reports the driver status if debug logs are enabled.
    */
 
   def reportDriverStatus(
@@ -163,8 +177,9 @@ private class ClientEndpoint(
       // logs again when waitAppCompletion is set to true
       if (!driverStatusReported) {
         driverStatusReported = true
-        logInfo(log"State of ${MDC(DRIVER_ID, submittedDriverID)}" +
-          log" is ${MDC(DRIVER_STATE, state.get)}")
+        logInfo(
+          log"State of ${MDC(DRIVER_ID, submittedDriverID)}" +
+            log" is ${MDC(DRIVER_STATE, state.get)}")
         // Worker node, if present
         (workerId, workerHostPort, state) match {
           case (Some(id), Some(hostPort), Some(DriverState.RUNNING)) =>
@@ -179,28 +194,31 @@ private class ClientEndpoint(
           System.exit(-1)
         case _ =>
           state.get match {
-            case DriverState.FINISHED | DriverState.FAILED |
-                 DriverState.ERROR | DriverState.KILLED =>
-              logInfo(log"State of driver ${MDC(DRIVER_ID, submittedDriverID)}" +
-                log" is ${MDC(DRIVER_STATE, state.get)}, exiting spark-submit JVM.")
+            case DriverState.FINISHED | DriverState.FAILED | DriverState.ERROR |
+                DriverState.KILLED =>
+              logInfo(
+                log"State of driver ${MDC(DRIVER_ID, submittedDriverID)}" +
+                  log" is ${MDC(DRIVER_STATE, state.get)}, exiting spark-submit JVM.")
               System.exit(0)
             case _ =>
               if (!waitAppCompletion) {
-                logInfo("spark-submit not configured to wait for completion, " +
-                  " exiting spark-submit JVM.")
+                logInfo(
+                  "spark-submit not configured to wait for completion, " +
+                    " exiting spark-submit JVM.")
                 System.exit(0)
               } else {
-                logDebug(log"State of driver ${MDC(DRIVER_ID, submittedDriverID)}" +
-                  log" is ${MDC(DRIVER_STATE, state.get)}, " +
-                  log"continue monitoring driver status.")
+                logDebug(
+                  log"State of driver ${MDC(DRIVER_ID, submittedDriverID)}" +
+                    log" is ${MDC(DRIVER_STATE, state.get)}, " +
+                    log"continue monitoring driver status.")
               }
           }
       }
     } else if (exception.exists(e => Utils.responseFromBackup(e.getMessage))) {
       logDebug(s"The status response is reported from a backup spark instance. So, ignored.")
     } else {
-        logError(log"ERROR: Cluster master did not recognize ${MDC(DRIVER_ID, submittedDriverID)}")
-        System.exit(-1)
+      logError(log"ERROR: Cluster master did not recognize ${MDC(DRIVER_ID, submittedDriverID)}")
+      System.exit(-1)
     }
   }
   override def receive: PartialFunction[Any, Unit] = {
@@ -268,7 +286,8 @@ object Client {
   def main(args: Array[String]): Unit = {
     // scalastyle:off println
     if (!sys.props.contains("SPARK_SUBMIT")) {
-      println("WARNING: This client is deprecated and will be removed in a future version of Spark")
+      println(
+        "WARNING: This client is deprecated and will be removed in a future version of Spark")
       println("Use ./bin/spark-submit with \"--master spark://host:port\"")
     }
     // scalastyle:on println
@@ -289,9 +308,11 @@ private[spark] class ClientApp extends SparkApplication {
     val rpcEnv =
       RpcEnv.create("driverClient", Utils.localHostName(), 0, conf, new SecurityManager(conf))
 
-    val masterEndpoints = driverArgs.masters.map(RpcAddress.fromSparkURL).
-      map(rpcEnv.setupEndpointRef(_, Master.ENDPOINT_NAME))
-    rpcEnv.setupEndpoint("client",
+    val masterEndpoints = driverArgs.masters
+      .map(RpcAddress.fromSparkURL)
+      .map(rpcEnv.setupEndpointRef(_, Master.ENDPOINT_NAME))
+    rpcEnv.setupEndpoint(
+      "client",
       new ClientEndpoint(rpcEnv, driverArgs, masterEndpoints.toImmutableArraySeq, conf))
 
     rpcEnv.awaitTermination()

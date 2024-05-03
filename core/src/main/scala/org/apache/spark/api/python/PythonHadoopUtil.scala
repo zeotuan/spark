@@ -40,33 +40,36 @@ trait Converter[-T, +U] extends Serializable {
 
 private[python] object Converter extends Logging {
 
-  def getInstance[T, U](converterClass: Option[String],
-                        defaultConverter: Converter[_ >: T, _ <: U]): Converter[T, U] = {
-    converterClass.map { cc =>
-      Try {
-        val c = Utils.classForName[Converter[T, U]](cc).getConstructor().newInstance()
-        logInfo(log"Loaded converter: ${MDC(CLASS_NAME, cc)}")
-        c
-      } match {
-        case Success(c) => c
-        case Failure(err) =>
-          logError(log"Failed to load converter: ${MDC(CLASS_NAME, cc)}")
-          throw err
+  def getInstance[T, U](
+      converterClass: Option[String],
+      defaultConverter: Converter[_ >: T, _ <: U]): Converter[T, U] = {
+    converterClass
+      .map { cc =>
+        Try {
+          val c = Utils.classForName[Converter[T, U]](cc).getConstructor().newInstance()
+          logInfo(log"Loaded converter: ${MDC(CLASS_NAME, cc)}")
+          c
+        } match {
+          case Success(c) => c
+          case Failure(err) =>
+            logError(log"Failed to load converter: ${MDC(CLASS_NAME, cc)}")
+            throw err
+        }
       }
-    }.getOrElse { defaultConverter }
+      .getOrElse { defaultConverter }
   }
 }
 
 /**
- * A converter that handles conversion of common [[org.apache.hadoop.io.Writable]] objects.
- * Other objects are passed through without conversion.
+ * A converter that handles conversion of common [[org.apache.hadoop.io.Writable]] objects. Other
+ * objects are passed through without conversion.
  */
-private[python] class WritableToJavaConverter(
-    conf: Broadcast[SerializableConfiguration]) extends Converter[Any, Any] {
+private[python] class WritableToJavaConverter(conf: Broadcast[SerializableConfiguration])
+    extends Converter[Any, Any] {
 
   /**
-   * Converts a [[org.apache.hadoop.io.Writable]] to the underlying primitive, String or
-   * object representation
+   * Converts a [[org.apache.hadoop.io.Writable]] to the underlying primitive, String or object
+   * representation
    */
   private def convertWritable(writable: Writable): Any = {
     writable match {
@@ -118,8 +121,8 @@ private[python] class WritableToJavaConverter(
 private[python] class JavaToWritableConverter extends Converter[Any, Writable] {
 
   /**
-   * Converts common data types to [[org.apache.hadoop.io.Writable]]. Note that array types are not
-   * supported out-of-the-box.
+   * Converts common data types to [[org.apache.hadoop.io.Writable]]. Note that array types are
+   * not supported out-of-the-box.
    */
   private def convertToWritable(obj: Any): Writable = {
     obj match {
@@ -143,8 +146,8 @@ private[python] class JavaToWritableConverter extends Converter[Any, Writable] {
         val arrayWriteable = new ArrayWritable(classOf[Writable])
         arrayWriteable.set(array.map(convertToWritable(_)))
         arrayWriteable
-      case other => throw new SparkException(
-        s"Data of type ${other.getClass.getName} cannot be used")
+      case other =>
+        throw new SparkException(s"Data of type ${other.getClass.getName} cannot be used")
     }
   }
 
@@ -167,8 +170,8 @@ private[python] object PythonHadoopUtil {
   }
 
   /**
-   * Merges two configurations, returns a copy of left with keys from right overwriting
-   * any matching keys in left
+   * Merges two configurations, returns a copy of left with keys from right overwriting any
+   * matching keys in left
    */
   def mergeConfs(left: Configuration, right: Configuration): Configuration = {
     val copy = new Configuration(left)
@@ -180,9 +183,10 @@ private[python] object PythonHadoopUtil {
    * Converts an RDD of key-value pairs, where key and/or value could be instances of
    * [[org.apache.hadoop.io.Writable]], into an RDD of base types, or vice versa.
    */
-  def convertRDD[K, V](rdd: RDD[(K, V)],
-                       keyConverter: Converter[K, Any],
-                       valueConverter: Converter[V, Any]): RDD[(Any, Any)] = {
+  def convertRDD[K, V](
+      rdd: RDD[(K, V)],
+      keyConverter: Converter[K, Any],
+      valueConverter: Converter[V, Any]): RDD[(Any, Any)] = {
     rdd.map { case (k, v) => (keyConverter.convert(k), valueConverter.convert(v)) }
   }
 

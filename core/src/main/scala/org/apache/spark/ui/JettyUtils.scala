@@ -57,9 +57,10 @@ private[spark] object JettyUtils extends Logging {
   // implicit conversion from many types of functions to jetty Handlers.
   type Responder[T] = HttpServletRequest => T
 
-  class ServletParams[T <: AnyRef](val responder: Responder[T],
-    val contentType: String,
-    val extractFn: T => String = (in: Any) => in.toString) {}
+  class ServletParams[T <: AnyRef](
+      val responder: Responder[T],
+      val contentType: String,
+      val extractFn: T => String = (in: Any) => in.toString) {}
 
   // Conversions from various types of Responder's to appropriate servlet parameters
   implicit def jsonResponderToServlet(responder: Responder[JValue]): ServletParams[JValue] =
@@ -204,7 +205,8 @@ private[spark] object JettyUtils extends Logging {
       override def newHttpClient(): HttpClient = {
         // SPARK-21176: Use the Jetty logic to calculate the number of selector threads (#CPUs/2),
         // but limit it to 8 max.
-        val numSelectors = math.max(1, math.min(8, Runtime.getRuntime().availableProcessors() / 2))
+        val numSelectors =
+          math.max(1, math.min(8, Runtime.getRuntime().availableProcessors() / 2))
         new HttpClient(new HttpClientTransportOverHTTP(numSelectors))
       }
 
@@ -214,14 +216,15 @@ private[spark] object JettyUtils extends Logging {
           headerName: String,
           headerValue: String): String = {
         if (headerName.equalsIgnoreCase("location")) {
-          val newHeader = createProxyLocationHeader(headerValue, clientRequest,
+          val newHeader = createProxyLocationHeader(
+            headerValue,
+            clientRequest,
             serverResponse.getRequest().getURI())
           if (newHeader != null) {
             return newHeader
           }
         }
-        super.filterServerResponseHeader(
-          clientRequest, serverResponse, headerName, headerValue)
+        super.filterServerResponseHeader(clientRequest, serverResponse, headerName, headerValue)
       }
     }
 
@@ -233,8 +236,8 @@ private[spark] object JettyUtils extends Logging {
   }
 
   /**
-   * Attempt to start a Jetty server bound to the supplied hostName:port using the given
-   * context handlers.
+   * Attempt to start a Jetty server bound to the supplied hostName:port using the given context
+   * handlers.
    *
    * If the desired port number is contended, continues incrementing ports until a free port is
    * found. Return the jetty Server object, the chosen port, and a mutable collection of handlers.
@@ -248,8 +251,9 @@ private[spark] object JettyUtils extends Logging {
       poolSize: Int = 200): ServerInfo = {
 
     val stopTimeout = conf.get(UI_JETTY_STOP_TIMEOUT)
-    logInfo(log"Start Jetty ${MDC(HOST, hostName)}:${MDC(PORT, port)}" +
-      log" for ${MDC(SERVER_NAME, serverName)}")
+    logInfo(
+      log"Start Jetty ${MDC(HOST, hostName)}:${MDC(PORT, port)}" +
+        log" for ${MDC(SERVER_NAME, serverName)}")
     // Start the server first, with no connectors.
     val pool = new QueuedThreadPool(poolSize)
     if (serverName.nonEmpty) {
@@ -289,18 +293,12 @@ private[spark] object JettyUtils extends Logging {
       def newConnector(
           connectionFactories: Array[ConnectionFactory],
           port: Int): (ServerConnector, Int) = {
-        val connector = new ServerConnector(
-          server,
-          null,
-          serverExecutor,
-          null,
-          -1,
-          -1,
-          connectionFactories: _*)
+        val connector =
+          new ServerConnector(server, null, serverExecutor, null, -1, -1, connectionFactories: _*)
         connector.setPort(port)
         connector.setHost(hostName)
         connector.setReuseAddress(!Utils.isWindows)
-         // spark-45248: set the idle timeout to prevent slow DoS
+        // spark-45248: set the idle timeout to prevent slow DoS
         connector.setIdleTimeout(8000)
 
         // Currently we only use "SelectChannelConnector"
@@ -326,7 +324,6 @@ private[spark] object JettyUtils extends Logging {
 
       // If SSL is configured, create the secure connector first.
       val securePort = sslOptions.createJettySslContextFactoryServer().map { factory =>
-
         // SPARK-45522: SniHostCheck defaulted to true since Jetty 10,
         // this will affect the standalone deployment.
         val src = new SecureRequestCustomizer()
@@ -336,15 +333,15 @@ private[spark] object JettyUtils extends Logging {
         val securePort = sslOptions.port.getOrElse(if (port > 0) Utils.userPort(port, 400) else 0)
         val secureServerName = if (serverName.nonEmpty) s"$serverName (HTTPS)" else serverName
 
-        val connectionFactories = AbstractConnectionFactory.getFactories(factory,
-          new HttpConnectionFactory(httpConfig))
+        val connectionFactories =
+          AbstractConnectionFactory.getFactories(factory, new HttpConnectionFactory(httpConfig))
 
         def sslConnect(currentPort: Int): (ServerConnector, Int) = {
           newConnector(connectionFactories, currentPort)
         }
 
-        val (connector, boundPort) = Utils.startServiceOnPort[ServerConnector](securePort,
-          sslConnect, conf, secureServerName)
+        val (connector, boundPort) = Utils
+          .startServiceOnPort[ServerConnector](securePort, sslConnect, conf, secureServerName)
         connector.setName(SPARK_CONNECTOR_NAME)
         server.addConnector(connector)
         boundPort
@@ -355,8 +352,8 @@ private[spark] object JettyUtils extends Logging {
         newConnector(Array(new HttpConnectionFactory(httpConfig)), currentPort)
       }
 
-      val (httpConnector, httpPort) = Utils.startServiceOnPort[ServerConnector](port, httpConnect,
-        conf, serverName)
+      val (httpConnector, httpPort) =
+        Utils.startServiceOnPort[ServerConnector](port, httpConnect, conf, serverName)
 
       // If SSL is configured, then configure redirection in the HTTP connector.
       securePort match {
@@ -496,28 +493,29 @@ private[spark] case class ServerInfo(
     boundPort: Int,
     securePort: Option[Int],
     private val conf: SparkConf,
-    private val rootHandler: ContextHandlerCollection) extends Logging {
+    private val rootHandler: ContextHandlerCollection)
+    extends Logging {
 
-  def addHandler(
-      handler: ServletContextHandler,
-      securityMgr: SecurityManager): Unit = synchronized {
-    handler.setVirtualHosts(JettyUtils.toVirtualHosts(JettyUtils.SPARK_CONNECTOR_NAME))
-    addFilters(handler, securityMgr)
+  def addHandler(handler: ServletContextHandler, securityMgr: SecurityManager): Unit =
+    synchronized {
+      handler.setVirtualHosts(JettyUtils.toVirtualHosts(JettyUtils.SPARK_CONNECTOR_NAME))
+      addFilters(handler, securityMgr)
 
-    val gzipHandler = new GzipHandler()
-    gzipHandler.setHandler(handler)
-    rootHandler.addHandler(gzipHandler)
+      val gzipHandler = new GzipHandler()
+      gzipHandler.setHandler(handler)
+      rootHandler.addHandler(gzipHandler)
 
-    if (!handler.isStarted()) {
-      handler.start()
+      if (!handler.isStarted()) {
+        handler.start()
+      }
+      gzipHandler.start()
     }
-    gzipHandler.start()
-  }
 
   def removeHandler(handler: ServletContextHandler): Unit = synchronized {
     // Since addHandler() always adds a wrapping gzip handler, find the container handler
     // and remove it.
-    rootHandler.getHandlers()
+    rootHandler
+      .getHandlers()
       .find { h =>
         h.isInstanceOf[GzipHandler] && h.asInstanceOf[GzipHandler].getHandler() == handler
       }
@@ -552,15 +550,18 @@ private[spark] case class ServerInfo(
   }
 
   /**
-   * Add filters, if any, to the given ServletContextHandlers. Always adds a filter at the end
-   * of the chain to perform security-related functions.
+   * Add filters, if any, to the given ServletContextHandlers. Always adds a filter at the end of
+   * the chain to perform security-related functions.
    */
   private def addFilters(handler: ServletContextHandler, securityMgr: SecurityManager): Unit = {
     conf.get(UI_FILTERS).foreach { filter =>
-      logInfo(log"Adding filter to" +
-        log" ${MDC(SERVLET_CONTEXT_HANDLER_PATH, handler.getContextPath())}:" +
-        log" ${MDC(UI_FILTER, filter)}")
-      val oldParams = conf.getOption(s"spark.$filter.params").toSeq
+      logInfo(
+        log"Adding filter to" +
+          log" ${MDC(SERVLET_CONTEXT_HANDLER_PATH, handler.getContextPath())}:" +
+          log" ${MDC(UI_FILTER, filter)}")
+      val oldParams = conf
+        .getOption(s"spark.$filter.params")
+        .toSeq
         .flatMap(Utils.stringToSeq)
         .flatMap { param =>
           val parts = param.split("=")
@@ -587,10 +588,10 @@ private[spark] case class ServerInfo(
  * A Jetty handler to handle redirects to a proxy server. It intercepts redirects and rewrites the
  * location to point to the proxy server.
  *
- * The handler needs to be set as the server's handler, because Jetty sometimes generates redirects
- * before invoking any servlet handlers or filters. One of such cases is when asking for the root of
- * a servlet context without the trailing slash (e.g. "/jobs") - Jetty will send a redirect to the
- * same URL, but with a trailing slash.
+ * The handler needs to be set as the server's handler, because Jetty sometimes generates
+ * redirects before invoking any servlet handlers or filters. One of such cases is when asking for
+ * the root of a servlet context without the trailing slash (e.g. "/jobs") - Jetty will send a
+ * redirect to the same URL, but with a trailing slash.
  */
 private class ProxyRedirectHandler(_proxyUri: String) extends HandlerWrapper {
 
@@ -604,10 +605,8 @@ private class ProxyRedirectHandler(_proxyUri: String) extends HandlerWrapper {
     super.handle(target, baseRequest, request, new ResponseWrapper(request, response))
   }
 
-  private class ResponseWrapper(
-      req: HttpServletRequest,
-      res: HttpServletResponse)
-    extends HttpServletResponseWrapper(res) {
+  private class ResponseWrapper(req: HttpServletRequest, res: HttpServletResponse)
+      extends HttpServletResponseWrapper(res) {
 
     override def sendRedirect(location: String): Unit = {
       val newTarget = if (location != null) {

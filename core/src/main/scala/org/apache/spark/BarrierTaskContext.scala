@@ -19,9 +19,11 @@ package org.apache.spark
 
 import java.util.{Properties, TimerTask}
 import java.util.concurrent.{ScheduledThreadPoolExecutor, TimeUnit}
+
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
-import scala.util.{Failure, Try, Success => ScalaSuccess}
+import scala.util.{Failure, Success => ScalaSuccess, Try}
+
 import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.{LogEntry, Logging, MDC, MessageWithContext}
@@ -34,14 +36,15 @@ import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util._
 
 /**
- * :: Experimental ::
- * A [[TaskContext]] with extra contextual info and tooling for tasks in a barrier stage.
- * Use [[BarrierTaskContext#get]] to obtain the barrier context for a running barrier task.
+ * :: Experimental :: A [[TaskContext]] with extra contextual info and tooling for tasks in a
+ * barrier stage. Use [[BarrierTaskContext#get]] to obtain the barrier context for a running
+ * barrier task.
  */
 @Experimental
 @Since("2.4.0")
-class BarrierTaskContext private[spark] (
-    taskContext: TaskContext) extends TaskContext with Logging {
+class BarrierTaskContext private[spark] (taskContext: TaskContext)
+    extends TaskContext
+    with Logging {
 
   import BarrierTaskContext._
 
@@ -56,13 +59,15 @@ class BarrierTaskContext private[spark] (
   private var barrierEpoch = 0
 
   private def logProgressInfo(msg: MessageWithContext, startTime: Option[Long]): Unit = {
-    val waitMsg = startTime.fold(log"")(st => log", waited " +
-      log"for ${MDC(TOTAL_TIME, System.currentTimeMillis() - st)} ms,")
-    logInfo(log"Task ${MDC(TASK_ATTEMPT_ID, taskAttemptId())}" +
-          log" from Stage ${MDC(STAGE_ID, stageId())}" +
-          log"(Attempt ${MDC(STAGE_ATTEMPT, stageAttemptNumber())}) " +
-          msg + waitMsg +
-          log" current barrier epoch is ${MDC(BARRIER_EPOCH, barrierEpoch)}.")
+    val waitMsg = startTime.fold(log"")(st =>
+      log", waited " +
+        log"for ${MDC(TOTAL_TIME, System.currentTimeMillis() - st)} ms,")
+    logInfo(
+      log"Task ${MDC(TASK_ATTEMPT_ID, taskAttemptId())}" +
+        log" from Stage ${MDC(STAGE_ID, stageId())}" +
+        log"(Attempt ${MDC(STAGE_ATTEMPT, stageAttemptNumber())}) " +
+        msg + waitMsg +
+        log" current barrier epoch is ${MDC(BARRIER_EPOCH, barrierEpoch)}.")
   }
 
   private def runBarrier(message: String, requestMethod: RequestMethod.Value): Array[String] = {
@@ -74,8 +79,7 @@ class BarrierTaskContext private[spark] (
       override def run(): Unit = {
         logProgressInfo(
           log"waiting under the global sync since ${MDC(TIME, startTime)}",
-          Some(startTime)
-        )
+          Some(startTime))
       }
     }
     // Log the update of global sync every 1 minute.
@@ -83,8 +87,15 @@ class BarrierTaskContext private[spark] (
 
     try {
       val abortableRpcFuture = barrierCoordinator.askAbortable[Array[String]](
-        message = RequestToSync(numPartitions(), stageId(), stageAttemptNumber(), taskAttemptId(),
-          barrierEpoch, partitionId(), message, requestMethod),
+        message = RequestToSync(
+          numPartitions(),
+          stageId(),
+          stageAttemptNumber(),
+          taskAttemptId(),
+          barrierEpoch,
+          partitionId(),
+          message,
+          requestMethod),
         // Set a fixed timeout for RPC here, so users shall get a SparkException thrown by
         // BarrierCoordinator on timeout, instead of RPCTimeoutException from the RPC framework.
         timeout = new RpcTimeout(365.days, "barrierTimeout"))
@@ -124,17 +135,16 @@ class BarrierTaskContext private[spark] (
   }
 
   /**
-   * :: Experimental ::
-   * Sets a global barrier and waits until all tasks in this stage hit this barrier. Similar to
-   * MPI_Barrier function in MPI, the barrier() function call blocks until all tasks in the same
-   * stage have reached this routine.
+   * :: Experimental :: Sets a global barrier and waits until all tasks in this stage hit this
+   * barrier. Similar to MPI_Barrier function in MPI, the barrier() function call blocks until all
+   * tasks in the same stage have reached this routine.
    *
    * CAUTION! In a barrier stage, each task must have the same number of barrier() calls, in all
    * possible code branches. Otherwise, you may get the job hanging or a SparkException after
    * timeout. Some examples of '''misuses''' are listed below:
-   * 1. Only call barrier() function on a subset of all the tasks in the same barrier stage, it
-   * shall lead to timeout of the function call.
-   * {{{
+   *   1. Only call barrier() function on a subset of all the tasks in the same barrier stage, it
+   *      shall lead to timeout of the function call.
+   *      {{{
    *   rdd.barrier().mapPartitions { iter =>
    *       val context = BarrierTaskContext.get()
    *       if (context.partitionId() == 0) {
@@ -144,7 +154,7 @@ class BarrierTaskContext private[spark] (
    *       }
    *       iter
    *   }
-   * }}}
+   *      }}}
    *
    * 2. Include barrier() function in a try-catch code block, this may lead to timeout of the
    * second function call.
@@ -168,22 +178,22 @@ class BarrierTaskContext private[spark] (
   def barrier(): Unit = runBarrier("", RequestMethod.BARRIER)
 
   /**
-   * :: Experimental ::
-   * Blocks until all tasks in the same stage have reached this routine. Each task passes in
-   * a message and returns with a list of all the messages passed in by each of those tasks.
+   * :: Experimental :: Blocks until all tasks in the same stage have reached this routine. Each
+   * task passes in a message and returns with a list of all the messages passed in by each of
+   * those tasks.
    *
    * CAUTION! The allGather method requires the same precautions as the barrier method
    *
-   * The message is type String rather than Array[Byte] because it is more convenient for
-   * the user at the cost of worse performance.
+   * The message is type String rather than Array[Byte] because it is more convenient for the user
+   * at the cost of worse performance.
    */
   @Experimental
   @Since("3.0.0")
   def allGather(message: String): Array[String] = runBarrier(message, RequestMethod.ALL_GATHER)
 
   /**
-   * :: Experimental ::
-   * Returns [[BarrierTaskInfo]] for all tasks in this barrier stage, ordered by partition ID.
+   * :: Experimental :: Returns [[BarrierTaskInfo]] for all tasks in this barrier stage, ordered
+   * by partition ID.
    */
   @Experimental
   @Since("2.4.0")
@@ -276,10 +286,10 @@ class BarrierTaskContext private[spark] (
 @Experimental
 @Since("2.4.0")
 object BarrierTaskContext {
+
   /**
-   * :: Experimental ::
-   * Returns the currently active BarrierTaskContext. This can be called inside of user functions to
-   * access contextual information about running barrier tasks.
+   * :: Experimental :: Returns the currently active BarrierTaskContext. This can be called inside
+   * of user functions to access contextual information about running barrier tasks.
    */
   @Experimental
   @Since("2.4.0")

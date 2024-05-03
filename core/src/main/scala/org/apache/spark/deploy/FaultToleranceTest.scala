@@ -40,9 +40,8 @@ import org.apache.spark.internal.LogKeys._
 import org.apache.spark.util.{ThreadUtils, Utils}
 
 /**
- * This suite tests the fault tolerance of the Spark standalone scheduler, mainly the Master.
- * In order to mimic a real distributed cluster more closely, Docker is used.
- * Execute using
+ * This suite tests the fault tolerance of the Spark standalone scheduler, mainly the Master. In
+ * order to mimic a real distributed cluster more closely, Docker is used. Execute using
  * ./bin/spark-class org.apache.spark.deploy.FaultToleranceTest
  *
  * Make sure that the environment includes the following properties in SPARK_DAEMON_JAVA_OPTS:
@@ -50,14 +49,14 @@ import org.apache.spark.util.{ThreadUtils, Utils}
  *   - spark.deploy.zookeeper.url=172.17.42.1:2181
  * Note that 172.17.42.1 is the default docker ip for the host and 2181 is the default ZK port.
  *
- * In case of failure, make sure to kill off prior docker containers before restarting:
- *   docker kill $(docker ps -q)
+ * In case of failure, make sure to kill off prior docker containers before restarting: docker
+ * kill $(docker ps -q)
  *
  * Unfortunately, due to the Docker dependency this suite cannot be run automatically without a
  * working installation of Docker. In addition to having Docker, the following are assumed:
  *   - Docker can run without sudo (see http://docs.docker.io/en/latest/use/basics/)
- *   - The docker images tagged spark-test-master and spark-test-worker are built from the
- *     docker/ directory. Run 'docker/spark-test/build' to generate these.
+ *   - The docker images tagged spark-test-master and spark-test-worker are built from the docker/
+ *     directory. Run 'docker/spark-test/build' to generate these.
  */
 private object FaultToleranceTest extends App with Logging {
 
@@ -270,8 +269,8 @@ private object FaultToleranceTest extends App with Logging {
   }
 
   /**
-   * Asserts that the cluster is usable and that the expected masters and workers
-   * are all alive in a proper configuration (e.g., only one leader).
+   * Asserts that the cluster is usable and that the expected masters and workers are all alive in
+   * a proper configuration (e.g., only one leader).
    */
   private def assertValidClusterState() = {
     logInfo(">>>>> ASSERT VALID CLUSTER STATE <<<<<")
@@ -283,7 +282,7 @@ private object FaultToleranceTest extends App with Logging {
 
     def stateValid(): Boolean = {
       workers.map(_.ip).forall(liveWorkerIPs.contains) &&
-        numAlive == 1 && numStandby == masters.size - 1 && numLiveApps >= 1
+      numAlive == 1 && numStandby == masters.size - 1 && numLiveApps >= 1
     }
 
     val f = Future {
@@ -335,13 +334,14 @@ private object FaultToleranceTest extends App with Logging {
     }
   }
 
-  logInfo(log"Ran ${MDC(NUM_TESTS, numPassed + numFailed)} tests," +
-    log" ${MDC(NUM_PASSED_TESTS, numPassed)} passed" +
-    log" and ${MDC(NUM_FAILED_TESTS, numFailed)} failed")
+  logInfo(
+    log"Ran ${MDC(NUM_TESTS, numPassed + numFailed)} tests," +
+      log" ${MDC(NUM_PASSED_TESTS, numPassed)} passed" +
+      log" and ${MDC(NUM_FAILED_TESTS, numFailed)} failed")
 }
 
 private class TestMasterInfo(val ip: String, val dockerId: DockerId, val logFile: File)
-  extends Logging  {
+    extends Logging {
 
   implicit val formats: Formats = org.json4s.DefaultFormats
   var state: RecoveryState.Value = _
@@ -353,15 +353,16 @@ private class TestMasterInfo(val ip: String, val dockerId: DockerId, val logFile
   def readState(): Unit = {
     try {
       val masterStream = new InputStreamReader(
-        new URL("http://%s:8080/json".format(ip)).openStream, StandardCharsets.UTF_8)
+        new URL("http://%s:8080/json".format(ip)).openStream,
+        StandardCharsets.UTF_8)
       val json = JsonMethods.parse(masterStream)
 
       val workers = json \ "workers"
       val liveWorkers = workers.children.filter(w => (w \ "state").extract[String] == "ALIVE")
       // Extract the worker IP from "webuiaddress" (rather than "host") because the host name
       // on containers is a weird hash instead of the actual IP address.
-      liveWorkerIPs = liveWorkers.map {
-        w => (w \ "webuiaddress").extract[String].stripPrefix("http://").stripSuffix(":8081")
+      liveWorkerIPs = liveWorkers.map { w =>
+        (w \ "webuiaddress").extract[String].stripPrefix("http://").stripSuffix(":8081")
       }
 
       numLiveApps = (json \ "activeapps").children.size
@@ -379,12 +380,11 @@ private class TestMasterInfo(val ip: String, val dockerId: DockerId, val logFile
   def kill(): Unit = { Docker.kill(dockerId) }
 
   override def toString: String =
-    "[ip=%s, id=%s, logFile=%s, state=%s]".
-      format(ip, dockerId.id, logFile.getAbsolutePath, state)
+    "[ip=%s, id=%s, logFile=%s, state=%s]".format(ip, dockerId.id, logFile.getAbsolutePath, state)
 }
 
 private class TestWorkerInfo(val ip: String, val dockerId: DockerId, val logFile: File)
-  extends Logging {
+    extends Logging {
 
   implicit val formats: Formats = org.json4s.DefaultFormats
 
@@ -409,7 +409,7 @@ private object SparkDocker {
     new TestWorkerInfo(ip, id, outFile)
   }
 
-  private def startNode(dockerCmd: ProcessBuilder) : (String, DockerId, File) = {
+  private def startNode(dockerCmd: ProcessBuilder): (String, DockerId, File) = {
     val ipPromise = Promise[String]()
     val outFile = File.createTempFile("fault-tolerance-test", "", Utils.createTempDir())
     val outStream: FileWriter = new FileWriter(outFile)
@@ -436,14 +436,15 @@ private class DockerId(val id: String) {
 
 private object Docker extends Logging {
   def makeRunCmd(imageTag: String, args: String = "", mountDir: String = ""): ProcessBuilder = {
-    val mountCmd = if (mountDir != "") { " -v " + mountDir } else ""
+    val mountCmd = if (mountDir != "") { " -v " + mountDir }
+    else ""
 
     val cmd = "docker run -privileged %s %s %s".format(mountCmd, imageTag, args)
     logDebug("Run command: " + cmd)
     cmd
   }
 
-  def kill(dockerId: DockerId) : Unit = {
+  def kill(dockerId: DockerId): Unit = {
     "docker kill %s".format(dockerId.id).!
   }
 

@@ -56,8 +56,8 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
   }
 
   /**
-   * Returns a CodaHale metrics Timer for measuring the listener's event processing time.
-   * This method is intended to be overridden by subclasses.
+   * Returns a CodaHale metrics Timer for measuring the listener's event processing time. This
+   * method is intended to be overridden by subclasses.
    */
   protected def getTimer(listener: L): Option[Timer] = None
 
@@ -69,8 +69,8 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
   }
 
   /**
-   * Remove a listener and it won't receive any events. This method is thread-safe and can be called
-   * in any thread.
+   * Remove a listener and it won't receive any events. This method is thread-safe and can be
+   * called in any thread.
    */
   final def removeListener(listener: L): Unit = {
     listenersPlusTimers.asScala.find(_._1 eq listener).foreach { listenerAndTimer =>
@@ -88,12 +88,11 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
 
   /**
    * This can be overridden by subclasses if there is any extra cleanup to do when removing a
-   * listener.  In particular AsyncEventQueues can clean up queues in the LiveListenerBus.
+   * listener. In particular AsyncEventQueues can clean up queues in the LiveListenerBus.
    */
   def removeListenerOnError(listener: L): Unit = {
     removeListener(listener)
   }
-
 
   /**
    * Post the event to all registered listeners. The `postToAll` caller should guarantee calling
@@ -123,8 +122,10 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
         }
       } catch {
         case ie: InterruptedException =>
-          logError(log"Interrupted while posting to " +
-            log"${MDC(LISTENER, listenerName)}. Removing that listener.", ie)
+          logError(
+            log"Interrupted while posting to " +
+              log"${MDC(LISTENER, listenerName)}. Removing that listener.",
+            ie)
           removeListenerOnError(listener)
         case NonFatal(e) if !isIgnorableException(e) =>
           logError(log"Listener ${MDC(LISTENER, listenerName)} threw an exception", e)
@@ -132,9 +133,10 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
         if (maybeTimerContext != null) {
           val elapsed = maybeTimerContext.stop()
           if (logSlowEventEnabled && elapsed > logSlowEventThreshold) {
-            logInfo(log"Process of event ${MDC(EVENT, redactEvent(event))} by" +
-              log"listener ${MDC(LISTENER, listenerName)} took " +
-              log"${MDC(TOTAL_TIME, elapsed / 1000000d)}ms.")
+            logInfo(
+              log"Process of event ${MDC(EVENT, redactEvent(event))} by" +
+                log"listener ${MDC(LISTENER, listenerName)} took " +
+                log"${MDC(TOTAL_TIME, elapsed / 1000000d)}ms.")
           }
         }
       }
@@ -150,7 +152,7 @@ private[spark] trait ListenerBus[L <: AnyRef, E] extends Logging {
   /** Allows bus implementations to prevent error logging for certain exceptions. */
   protected def isIgnorableException(e: Throwable): Boolean = false
 
-  private[spark] def findListenersByClass[T <: L : ClassTag](): Seq[T] = {
+  private[spark] def findListenersByClass[T <: L: ClassTag](): Seq[T] = {
     val c = implicitly[ClassTag[T]].runtimeClass
     listeners.asScala.filter(_.getClass == c).map(_.asInstanceOf[T]).toSeq
   }

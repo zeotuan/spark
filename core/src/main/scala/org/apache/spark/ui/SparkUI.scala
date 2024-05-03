@@ -48,10 +48,15 @@ private[spark] class SparkUI private (
     val basePath: String,
     val startTime: Long,
     val appSparkVersion: String)
-  extends WebUI(securityManager, securityManager.getSSLOptions("ui"), SparkUI.getUIPort(conf),
-    conf, basePath, "SparkUI")
-  with Logging
-  with UIRoot {
+    extends WebUI(
+      securityManager,
+      securityManager.getSSLOptions("ui"),
+      SparkUI.getUIPort(conf),
+      conf,
+      basePath,
+      "SparkUI")
+    with Logging
+    with UIRoot {
 
   val killEnabled = sc.map(_.conf.get(UI_KILL_ENABLED)).getOrElse(false)
 
@@ -84,9 +89,11 @@ private[spark] class SparkUI private (
     readyToAttachHandlers = true
   }
 
-  /** Attaches a handler to this UI.
-   *  Note: The handler will not be attached until readyToAttachHandlers is true,
-   *  handlers added before that will be attached by attachAllHandlers */
+  /**
+   * Attaches a handler to this UI. Note: The handler will not be attached until
+   * readyToAttachHandlers is true, handlers added before that will be attached by
+   * attachAllHandlers
+   */
   override def attachHandler(handler: ServletContextHandler): Unit = synchronized {
     handlers += handler
     if (readyToAttachHandlers) {
@@ -105,9 +112,11 @@ private[spark] class SparkUI private (
     if (sc.map(_.conf.get(DRIVER_LOG_LOCAL_DIR).nonEmpty).getOrElse(false)) {
       val driverLogTab = new DriverLogTab(this)
       attachTab(driverLogTab)
-      attachHandler(createServletHandler("/log",
-        (request: HttpServletRequest) => driverLogTab.getPage.renderLog(request),
-        sc.get.conf))
+      attachHandler(
+        createServletHandler(
+          "/log",
+          (request: HttpServletRequest) => driverLogTab.getPage.renderLog(request),
+          sc.get.conf))
     }
     attachTab(new ExecutorsTab(this))
     addStaticHandler(SparkUI.STATIC_RESOURCE_DIR)
@@ -118,11 +127,18 @@ private[spark] class SparkUI private (
     }
 
     // These should be POST only, but, the YARN AM proxy won't proxy POSTs
-    attachHandler(createRedirectHandler(
-      "/jobs/job/kill", "/jobs/", jobsTab.handleKillRequest, httpMethods = Set("GET", "POST")))
-    attachHandler(createRedirectHandler(
-      "/stages/stage/kill", "/stages/", stagesTab.handleKillRequest,
-      httpMethods = Set("GET", "POST")))
+    attachHandler(
+      createRedirectHandler(
+        "/jobs/job/kill",
+        "/jobs/",
+        jobsTab.handleKillRequest,
+        httpMethods = Set("GET", "POST")))
+    attachHandler(
+      createRedirectHandler(
+        "/stages/stage/kill",
+        "/stages/",
+        stagesTab.handleKillRequest,
+        httpMethods = Set("GET", "POST")))
   }
 
   initialize()
@@ -144,9 +160,8 @@ private[spark] class SparkUI private (
   }
 
   /**
-   * To start SparUI, Spark starts Jetty Server first to bind address.
-   * After the Spark application is fully started, call [attachAllHandlers]
-   * to start all existing handlers.
+   * To start SparUI, Spark starts Jetty Server first to bind address. After the Spark application
+   * is fully started, call [attachAllHandlers] to start all existing handlers.
    */
   override def bind(): Unit = {
     assert(serverInfo.isEmpty, s"Attempted to bind $className more than once!")
@@ -175,30 +190,32 @@ private[spark] class SparkUI private (
     }
   }
 
-  override def checkUIViewPermissions(appId: String, attemptId: Option[String],
+  override def checkUIViewPermissions(
+      appId: String,
+      attemptId: Option[String],
       user: String): Boolean = {
     securityManager.checkUIViewPermissions(user)
   }
 
   def getApplicationInfoList: Iterator[ApplicationInfo] = {
-    Iterator(new ApplicationInfo(
-      id = appId,
-      name = appName,
-      coresGranted = None,
-      maxCores = None,
-      coresPerExecutor = None,
-      memoryPerExecutorMB = None,
-      attempts = Seq(new ApplicationAttemptInfo(
-        attemptId = None,
-        startTime = new Date(startTime),
-        endTime = new Date(-1),
-        duration = System.currentTimeMillis() - startTime,
-        lastUpdated = new Date(startTime),
-        sparkUser = getSparkUser,
-        completed = false,
-        appSparkVersion = appSparkVersion
-      ))
-    ))
+    Iterator(
+      new ApplicationInfo(
+        id = appId,
+        name = appName,
+        coresGranted = None,
+        maxCores = None,
+        coresPerExecutor = None,
+        memoryPerExecutorMB = None,
+        attempts = Seq(
+          new ApplicationAttemptInfo(
+            attemptId = None,
+            startTime = new Date(startTime),
+            endTime = new Date(-1),
+            duration = System.currentTimeMillis() - startTime,
+            lastUpdated = new Date(startTime),
+            sparkUser = getSparkUser,
+            completed = false,
+            appSparkVersion = appSparkVersion))))
   }
 
   def getApplicationInfo(appId: String): Option[ApplicationInfo] = {
@@ -217,7 +234,7 @@ private[spark] class SparkUI private (
 }
 
 private[spark] abstract class SparkUITab(parent: SparkUI, prefix: String)
-  extends WebUITab(parent, prefix) {
+    extends WebUITab(parent, prefix) {
 
   def appName: String = parent.appName
 
