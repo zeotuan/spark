@@ -73,7 +73,7 @@ class SparkShellSuite extends SparkFunSuite {
     val lock = new Object
 
     def captureOutput(source: String)(line: String): Unit = lock.synchronized {
-      val newLine = log"${MDC(STREAM_SOURCE, source)}> ${MDC(OUTPUT_LINE, line)}"
+      val newLine = s"$source> $line"
 
       logInfo(newLine)
       buffer += newLine
