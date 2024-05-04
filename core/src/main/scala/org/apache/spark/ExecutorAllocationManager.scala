@@ -456,7 +456,7 @@ private[spark] class ExecutorAllocationManager(
           val delta = targetNum.delta
           totalDelta += delta
           if (delta > 0) {
-            val executorsString = log"executor" + { if (delta > 1) "s" else "" }
+            val executorsString = log"executor" + { if (delta > 1) log"s" else log"" }
             logInfo(
               log"Requesting ${MDC(TARGET_NUM_EXECUTOR_DELTA, delta)}" +
                 log" new $executorsString because tasks are backlogged " +
