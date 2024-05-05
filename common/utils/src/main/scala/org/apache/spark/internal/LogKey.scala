@@ -534,7 +534,6 @@ object LogKeys {
   case object SHUFFLE_SERVICE_NAME extends LogKey
   case object SIGNAL extends LogKey
   case object SIZE extends LogKey
-  case object SIGNAL extends LogKey
   case object SLEEP_TIME extends LogKey
   case object SLIDE_DURATION extends LogKey
   case object SMALLEST_CLUSTER_INDEX extends LogKey
