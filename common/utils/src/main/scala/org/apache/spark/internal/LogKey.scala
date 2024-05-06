@@ -149,8 +149,8 @@ object LogKeys {
   case object DELTA extends LogKey
   case object DEPRECATED_KEY extends LogKey
   case object DESCRIPTION extends LogKey
-  case object DESTINATION_ABSOLUTE_PATH extends LogKey
   case object DESIRED_NUM_PARTITIONS extends LogKey
+  case object DESTINATION_ABSOLUTE_PATH extends LogKey
   case object DFS_FILE extends LogKey
   case object DIFF_DELTA extends LogKey
   case object DIVISIBLE_CLUSTER_INDICES_SIZE extends LogKey
@@ -366,8 +366,8 @@ object LogKeys {
   case object NUM_EXECUTOR_CORES extends LogKey
   case object NUM_EXECUTOR_CORES_REMAINING extends LogKey
   case object NUM_EXECUTOR_CORES_TOTAL extends LogKey
-  case object NUM_FAILURES extends LogKey
   case object NUM_FAILED_TESTS extends LogKey
+  case object NUM_FAILURES extends LogKey
   case object NUM_FEATURES extends LogKey
   case object NUM_FILES extends LogKey
   case object NUM_FILES_COPIED extends LogKey
@@ -378,10 +378,10 @@ object LogKeys {
   case object NUM_LEFT_PARTITION_VALUES extends LogKey
   case object NUM_LOADED_ENTRIES extends LogKey
   case object NUM_LOCAL_FREQUENT_PATTERN extends LogKey
-  case object NUM_PASSED_TESTS extends LogKey
   case object NUM_PARTITIONS extends LogKey
   case object NUM_PARTITIONS2 extends LogKey
   case object NUM_PARTITION_VALUES extends LogKey
+  case object NUM_PASSED_TESTS extends LogKey
   case object NUM_PEERS extends LogKey
   case object NUM_PEERS_REPLICATED_TO extends LogKey
   case object NUM_PEERS_TO_REPLICATE_TO extends LogKey
@@ -391,10 +391,10 @@ object LogKeys {
   case object NUM_PRUNED extends LogKey
   case object NUM_REPLICAS extends LogKey
   case object NUM_REQUESTS extends LogKey
+  case object NUM_REQUEST_SYNC_TASK extends LogKey
   case object NUM_RESOURCE_SLOTS extends LogKey
   case object NUM_RETRIES extends LogKey
   case object NUM_RIGHT_PARTITION_VALUES extends LogKey
-  case object NUM_REQUEST_SYNC_TASK extends LogKey
   case object NUM_SEQUENCES extends LogKey
   case object NUM_SLOTS extends LogKey
   case object NUM_TASKS extends LogKey
@@ -473,9 +473,9 @@ object LogKeys {
   case object QUERY_RUN_ID extends LogKey
   case object RANGE extends LogKey
   case object RDD_CHECKPOINT_DIR extends LogKey
+  case object RDD_DEBUG_STRING extends LogKey
   case object RDD_DESCRIPTION extends LogKey
   case object RDD_ID extends LogKey
-  case object RDD_DEBUG_STRING extends LogKey
   case object READ_LIMIT extends LogKey
   case object REASON extends LogKey
   case object REATTACHABLE extends LogKey
