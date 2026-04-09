@@ -34,7 +34,7 @@ import org.apache.spark.connect.proto.ExecutePlanResponse.ObservedMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.catalyst.encoders.{AgnosticEncoder, RowEncoder}
-import org.apache.spark.sql.catalyst.encoders.AgnosticEncoders.{ProductEncoder, UnboundRowEncoder}
+import org.apache.spark.sql.catalyst.encoders.AgnosticEncoders.{ProductEncoder, UnboundRowEncoder, unwrapNullabilityOverride, withNullability}
 import org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema
 import org.apache.spark.sql.connect.client.arrow.ArrowDeserializingIterator
 import org.apache.spark.sql.connect.common.{DataTypeProtoConverter, LiteralValueProtoConverter}
@@ -97,7 +97,8 @@ private[sql] class SparkResult[T](
   private def createEncoder[E](
       enc: AgnosticEncoder[E],
       dataType: DataType): AgnosticEncoder[E] = {
-    enc match {
+    val underlying = unwrapNullabilityOverride(enc).asInstanceOf[AgnosticEncoder[E]]
+    val updated = underlying match {
       case UnboundRowEncoder =>
         // Replace the row encoder with the encoder inferred from the schema.
         RowEncoder
@@ -112,8 +113,9 @@ private[sql] class SparkResult[T](
         }
         ProductEncoder(clsTag, updatedFields, outer)
       case _ =>
-        enc
+        underlying
     }
+    withNullability(updated, enc.nullable)
   }
 
   private def processResponses(

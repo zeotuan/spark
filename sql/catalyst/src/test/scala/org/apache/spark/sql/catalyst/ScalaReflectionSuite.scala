@@ -240,6 +240,35 @@ class ScalaReflectionSuite extends SparkFunSuite {
       nullable = true))
   }
 
+  test("strictSchemaFor infers nullability from Option only") {
+    val nullableData = ScalaReflection.strictSchemaFor[NullableData]
+    val nullableFields = nullableData.dataType.asInstanceOf[StructType]
+    assert(nullableData.nullable === false)
+    assert(nullableFields.forall(field => !field.nullable))
+
+    val optionalData = ScalaReflection.strictSchemaFor[OptionalData]
+    val optionalFields = optionalData.dataType.asInstanceOf[StructType]
+    assert(optionalData.nullable === false)
+    assert(optionalFields.forall(field => field.nullable))
+    assert(optionalFields("structField").dataType.asInstanceOf[StructType].forall(field => !field.nullable))
+
+    val complexData = ScalaReflection.strictSchemaFor[ComplexData]
+    val complexFields = complexData.dataType.asInstanceOf[StructType]
+    assert(complexData.nullable === false)
+    assert(complexFields("arrayField").dataType === ArrayType(IntegerType, containsNull = false))
+    assert(
+      complexFields("arrayFieldContainsNull").dataType === ArrayType(IntegerType, containsNull = false))
+    assert(
+      complexFields("mapFieldValueContainsNull").dataType ===
+        MapType(IntegerType, LongType, valueContainsNull = false))
+    assert(complexFields("structField").nullable === false)
+    assert(
+      complexFields("nestedArrayField").dataType ===
+        ArrayType(ArrayType(IntegerType, containsNull = false), containsNull = false))
+
+    assert(ScalaReflection.strictSchemaFor[Option[Int]].nullable)
+  }
+
   test("optional data") {
     val schema = schemaFor[OptionalData]
     assert(schema === Schema(

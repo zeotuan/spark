@@ -28,7 +28,7 @@ import scala.reflect.runtime.universe.TypeTag
 
 import org.apache.spark.{SPARK_DOC_ROOT, SparkArithmeticException, SparkRuntimeException, SparkUnsupportedOperationException}
 import org.apache.spark.sql.{Encoder, Encoders, Row}
-import org.apache.spark.sql.catalyst.{FooClassWithEnum, FooEnum, OptionalData, PrimitiveData, ScalaReflection, ScroogeLikeExample}
+import org.apache.spark.sql.catalyst.{FooClassWithEnum, FooEnum, InternalRow, OptionalData, PrimitiveData, ScalaReflection, ScroogeLikeExample}
 import org.apache.spark.sql.catalyst.analysis.AnalysisTest
 import org.apache.spark.sql.catalyst.dsl.plans._
 import org.apache.spark.sql.catalyst.encoders.AgnosticEncoders.{BinaryEncoder, EncoderField, IterableEncoder, MapEncoder, OptionEncoder, PrimitiveIntEncoder, ProductEncoder, TimestampEncoder, TransformingEncoder}
@@ -122,6 +122,14 @@ object ReferenceValueClass {
   case class Container(data: Int)
 }
 case class IntAndString(i: Int, s: String)
+case class StrictNullabilityData(
+    name: String,
+    alias: Option[String],
+    values: Seq[String],
+    maybeValues: Seq[Option[String]],
+    attributes: Map[String, String],
+    maybeAttributes: Map[String, Option[String]],
+    child: IntAndString)
 
 case class StringWrapper(s: String) extends AnyVal
 case class ValueContainer(
@@ -525,6 +533,65 @@ class ExpressionEncoderSuite extends CodegenInterpretedPlanTest with AnalysisTes
     checkNullable[Option[Int]](true)
     checkNullable[java.lang.Integer](true)
     checkNullable[String](true)
+  }
+
+  test("strict product encoder schema nullability") {
+    val schema = encoderFor(Encoders.strictProduct[StrictNullabilityData]).schema
+
+    assert(schema("name").nullable === false)
+    assert(schema("alias").nullable)
+
+    assert(schema("values").nullable === false)
+    assert(schema("values").dataType === ArrayType(StringType, containsNull = false))
+
+    assert(schema("maybeValues").nullable === false)
+    assert(schema("maybeValues").dataType === ArrayType(StringType, containsNull = true))
+
+    assert(schema("attributes").nullable === false)
+    assert(schema("attributes").dataType === MapType(StringType, StringType, valueContainsNull = false))
+
+    assert(schema("maybeAttributes").nullable === false)
+    assert(
+      schema("maybeAttributes").dataType === MapType(StringType, StringType, valueContainsNull = true))
+
+    val childSchema = schema("child").dataType.asInstanceOf[StructType]
+    assert(schema("child").nullable === false)
+    assert(childSchema("i").nullable === false)
+    assert(childSchema("s").nullable === false)
+  }
+
+  test("strict product encoder rejects unexpected nulls") {
+    val strictIntAndString = encoderFor(Encoders.strictProduct[IntAndString]).resolveAndBind()
+    val toRow = strictIntAndString.createSerializer()
+    val fromRow = strictIntAndString.createDeserializer()
+
+    assert(intercept[SparkRuntimeException] {
+      toRow(IntAndString(1, null))
+    }.getCondition == "NOT_NULL_ASSERT_VIOLATION")
+
+    assert(intercept[SparkRuntimeException] {
+      fromRow(InternalRow(1, null))
+    }.getCondition == "NOT_NULL_ASSERT_VIOLATION")
+
+    val strictCollections = encoderFor(Encoders.strictProduct[StrictNullabilityData]).createSerializer()
+    val base = StrictNullabilityData(
+      name = "spark",
+      alias = Some("sql"),
+      values = Seq("a", "b"),
+      maybeValues = Seq(Some("c"), None),
+      attributes = Map("k" -> "v"),
+      maybeAttributes = Map("k" -> None),
+      child = IntAndString(2, "encoder"))
+
+    strictCollections(base)
+
+    assert(intercept[SparkRuntimeException] {
+      strictCollections(base.copy(values = Seq("a", null: String)))
+    }.getCondition == "NOT_NULL_ASSERT_VIOLATION")
+
+    assert(intercept[SparkRuntimeException] {
+      strictCollections(base.copy(attributes = Map("k" -> (null: String))))
+    }.getCondition == "NOT_NULL_ASSERT_VIOLATION")
   }
 
   test("null check for map key: String") {

@@ -20,7 +20,7 @@ import scala.collection.Map
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.sql.catalyst.InternalRow
-import org.apache.spark.sql.catalyst.encoders.AgnosticEncoders.{BinaryEncoder, CalendarIntervalEncoder, NullEncoder, PrimitiveBooleanEncoder, PrimitiveByteEncoder, PrimitiveDoubleEncoder, PrimitiveFloatEncoder, PrimitiveIntEncoder, PrimitiveLongEncoder, PrimitiveShortEncoder, SparkDecimalEncoder, VariantEncoder}
+import org.apache.spark.sql.catalyst.encoders.AgnosticEncoders.{BinaryEncoder, CalendarIntervalEncoder, NullEncoder, PrimitiveBooleanEncoder, PrimitiveByteEncoder, PrimitiveDoubleEncoder, PrimitiveFloatEncoder, PrimitiveIntEncoder, PrimitiveLongEncoder, PrimitiveShortEncoder, SparkDecimalEncoder, VariantEncoder, unwrapNullabilityOverride}
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.types.{PhysicalBinaryType, PhysicalIntegerType, PhysicalLongType}
 import org.apache.spark.sql.catalyst.types.ops.TypeOps
@@ -69,34 +69,36 @@ object EncoderUtils {
   private def externalDataTypeFor(
       enc: AgnosticEncoder[_],
       lenientSerialization: Boolean): DataType = {
+    val underlying = unwrapNullabilityOverride(enc)
     // DataType can be native.
-    if (isNativeEncoder(enc)) {
-      enc.dataType
+    if (isNativeEncoder(underlying)) {
+      underlying.dataType
     } else if (lenientSerialization) {
       ObjectType(classOf[java.lang.Object])
     } else {
-      ObjectType(enc.clsTag.runtimeClass)
+      ObjectType(underlying.clsTag.runtimeClass)
     }
   }
 
   /**
    * Returns true if the encoders' internal and external data type is the same.
    */
-  private[catalyst] def isNativeEncoder(enc: AgnosticEncoder[_]): Boolean = enc match {
-    case PrimitiveBooleanEncoder => true
-    case PrimitiveByteEncoder => true
-    case PrimitiveShortEncoder => true
-    case PrimitiveIntEncoder => true
-    case PrimitiveLongEncoder => true
-    case PrimitiveFloatEncoder => true
-    case PrimitiveDoubleEncoder => true
-    case NullEncoder => true
-    case CalendarIntervalEncoder => true
-    case BinaryEncoder => true
-    case _: SparkDecimalEncoder => true
-    case VariantEncoder => true
-    case _ => false
-  }
+  private[catalyst] def isNativeEncoder(enc: AgnosticEncoder[_]): Boolean =
+    unwrapNullabilityOverride(enc) match {
+      case PrimitiveBooleanEncoder => true
+      case PrimitiveByteEncoder => true
+      case PrimitiveShortEncoder => true
+      case PrimitiveIntEncoder => true
+      case PrimitiveLongEncoder => true
+      case PrimitiveFloatEncoder => true
+      case PrimitiveDoubleEncoder => true
+      case NullEncoder => true
+      case CalendarIntervalEncoder => true
+      case BinaryEncoder => true
+      case _: SparkDecimalEncoder => true
+      case VariantEncoder => true
+      case _ => false
+    }
 
   def dataTypeJavaClass(dt: DataType): Class[_] =
     TypeOps(dt).map(_.getJavaClass).getOrElse(dataTypeJavaClassDefault(dt))
