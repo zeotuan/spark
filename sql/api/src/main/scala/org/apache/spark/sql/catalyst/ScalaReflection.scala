@@ -164,6 +164,13 @@ object ScalaReflection extends ScalaReflection {
     Schema(enc.dataType, enc.nullable)
   }
 
+  private[sql] def strictSchemaFor[T: TypeTag]: Schema = strictSchemaFor(localTypeOf[T])
+
+  private[sql] def strictSchemaFor(tpe: `Type`): Schema = {
+    val enc = strictEncoderFor(tpe)
+    Schema(enc.dataType, enc.nullable)
+  }
+
   /**
    * Finds an accessible constructor with compatible parameters. This is a more flexible search
    * than the exact matching algorithm in `Class.getConstructor`. The first assignment-compatible
@@ -236,6 +243,10 @@ object ScalaReflection extends ScalaReflection {
     encoderFor(typeTag[E].in(mirror).tpe).asInstanceOf[AgnosticEncoder[E]]
   }
 
+  private[sql] def strictEncoderFor[E: TypeTag]: AgnosticEncoder[E] = {
+    strictEncoderFor(typeTag[E].in(mirror).tpe).asInstanceOf[AgnosticEncoder[E]]
+  }
+
   /**
    * Same as [[encoderFor]] but with extended support to return [[UnboundRowEncoder]] for [[Row]]
    * type.
@@ -245,41 +256,70 @@ object ScalaReflection extends ScalaReflection {
       .asInstanceOf[AgnosticEncoder[E]]
   }
 
+  private[sql] def strictEncoderFor(tpe: `Type`): AgnosticEncoder[_] =
+    encoderFor(tpe, isRowEncoderSupported = false, useTypeNullability = true)
+
   /**
    * Create an [[AgnosticEncoder]] for a [[Type]].
    */
   def encoderFor(tpe: `Type`, isRowEncoderSupported: Boolean = false): AgnosticEncoder[_] =
+    encoderFor(tpe, isRowEncoderSupported, useTypeNullability = false)
+
+  private def encoderFor(
+      tpe: `Type`,
+      isRowEncoderSupported: Boolean,
+      useTypeNullability: Boolean): AgnosticEncoder[_] =
     cleanUpReflectionObjects {
       val clsName = getClassNameFromType(tpe)
       val walkedTypePath = WalkedTypePath().recordRoot(clsName)
-      encoderFor(tpe, Set.empty, walkedTypePath, isRowEncoderSupported)
+      encoderFor(tpe, Set.empty, walkedTypePath, isRowEncoderSupported, useTypeNullability)
     }
 
   private def encoderFor(
       tpe: `Type`,
       seenTypeSet: Set[`Type`],
       path: WalkedTypePath,
-      isRowEncoderSupported: Boolean): AgnosticEncoder[_] = {
+      isRowEncoderSupported: Boolean,
+      useTypeNullability: Boolean): AgnosticEncoder[_] = {
+    def typeAllowsNull(t: `Type`): Boolean = {
+      val base = baseType(t)
+      isSubtype(base, definitions.NullTpe) || isSubtype(base, localTypeOf[Option[_]])
+    }
+
+    def maybeOverrideNullability(enc: AgnosticEncoder[_], nullable: Boolean): AgnosticEncoder[_] = {
+      if (useTypeNullability) {
+        withNullability(enc.asInstanceOf[AgnosticEncoder[Any]], nullable)
+      } else {
+        enc
+      }
+    }
+
+    def finalizeEncoder(t: `Type`, enc: AgnosticEncoder[_]): AgnosticEncoder[_] =
+      maybeOverrideNullability(enc, typeAllowsNull(t))
+
     def createIterableEncoder(t: `Type`, fallbackClass: Class[_]): AgnosticEncoder[_] = {
       val TypeRef(_, _, Seq(elementType)) = t
       val encoder = encoderFor(
         elementType,
         seenTypeSet,
         path.recordArray(getClassNameFromType(elementType)),
-        isRowEncoderSupported)
-      val companion = t.dealias.typeSymbol.companion.typeSignature
-      val targetClass = companion.member(TermName("newBuilder")) match {
-        case NoSymbol => fallbackClass
-        case _ => mirror.runtimeClass(t.typeSymbol.asClass)
-      }
-      IterableEncoder(
-        ClassTag(targetClass),
-        encoder,
-        encoder.nullable,
-        lenientSerialization = false)
+        isRowEncoderSupported,
+        useTypeNullability)
+      finalizeEncoder(t, {
+        val companion = t.dealias.typeSymbol.companion.typeSignature
+        val targetClass = companion.member(TermName("newBuilder")) match {
+          case NoSymbol => fallbackClass
+          case _ => mirror.runtimeClass(t.typeSymbol.asClass)
+        }
+        IterableEncoder(
+          ClassTag(targetClass),
+          encoder,
+          encoder.nullable,
+          lenientSerialization = false)
+      })
     }
 
-    baseType(tpe) match {
+    finalizeEncoder(tpe, baseType(tpe) match {
       // this must be the first case, since all objects in scala are instances of Null, therefore
       // Null type would wrongly match the first of them, which is Option as of now
       case t if isSubtype(t, definitions.NullTpe) => NullEncoder
@@ -365,7 +405,8 @@ object ScalaReflection extends ScalaReflection {
           optType,
           seenTypeSet,
           path.recordOption(getClassNameFromType(optType)),
-          isRowEncoderSupported)
+          isRowEncoderSupported,
+          useTypeNullability)
         OptionEncoder(encoder)
 
       case t if isSubtype(t, localTypeOf[Array[_]]) =>
@@ -374,7 +415,8 @@ object ScalaReflection extends ScalaReflection {
           elementType,
           seenTypeSet,
           path.recordArray(getClassNameFromType(elementType)),
-          isRowEncoderSupported)
+          isRowEncoderSupported,
+          useTypeNullability)
         ArrayEncoder(encoder, encoder.nullable)
 
       case t if isSubtype(t, localTypeOf[scala.collection.Seq[_]]) =>
@@ -389,12 +431,14 @@ object ScalaReflection extends ScalaReflection {
           keyType,
           seenTypeSet,
           path.recordKeyForMap(getClassNameFromType(keyType)),
-          isRowEncoderSupported)
+          isRowEncoderSupported,
+          useTypeNullability)
         val valueEncoder = encoderFor(
           valueType,
           seenTypeSet,
           path.recordValueForMap(getClassNameFromType(valueType)),
-          isRowEncoderSupported)
+          isRowEncoderSupported,
+          useTypeNullability)
         MapEncoder(ClassTag(getClassFromType(t)), keyEncoder, valueEncoder, valueEncoder.nullable)
 
       case t if definedByConstructorParams(t) =>
@@ -410,14 +454,15 @@ object ScalaReflection extends ScalaReflection {
             fieldType,
             seenTypeSet + t,
             path.recordField(getClassNameFromType(fieldType), fieldName),
-            isRowEncoderSupported)
+            isRowEncoderSupported,
+            useTypeNullability)
           EncoderField(fieldName, encoder, encoder.nullable, Metadata.empty)
         }
         val cls = getClassFromType(t)
         ProductEncoder(ClassTag(cls), params, Option(OuterScopes.getOuterScope(cls)))
       case _ =>
         throw ExecutionErrors.cannotFindEncoderForTypeError(tpe.toString)
-    }
+    })
   }
 }
 

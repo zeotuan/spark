@@ -60,6 +60,36 @@ object AgnosticEncoders {
     case other => throw ExecutionErrors.invalidAgnosticEncoderError(other)
   }
 
+  case class NullabilityOverrideEncoder[E](
+      underlying: AgnosticEncoder[E],
+      override val nullable: Boolean)
+      extends AgnosticEncoder[E] {
+    override def isPrimitive: Boolean = underlying.isPrimitive
+    override def dataType: DataType = underlying.dataType
+    override val clsTag: ClassTag[E] = underlying.clsTag
+    override def lenientSerialization: Boolean = underlying.lenientSerialization
+    override def isStruct: Boolean = underlying.isStruct
+    override def schema: StructType = underlying.schema
+  }
+
+  @scala.annotation.tailrec
+  private[sql] def unwrapNullabilityOverride(enc: AgnosticEncoder[_]): AgnosticEncoder[_] =
+    enc match {
+      case NullabilityOverrideEncoder(underlying, _) => unwrapNullabilityOverride(underlying)
+      case other => other
+    }
+
+  private[sql] def withNullability[E](
+      enc: AgnosticEncoder[E],
+      nullable: Boolean): AgnosticEncoder[E] = {
+    val underlying = unwrapNullabilityOverride(enc).asInstanceOf[AgnosticEncoder[E]]
+    if (underlying.nullable == nullable) {
+      underlying
+    } else {
+      NullabilityOverrideEncoder(underlying, nullable)
+    }
+  }
+
   case class OptionEncoder[E](elementEncoder: AgnosticEncoder[E])
       extends AgnosticEncoder[Option[E]] {
     override def isPrimitive: Boolean = false

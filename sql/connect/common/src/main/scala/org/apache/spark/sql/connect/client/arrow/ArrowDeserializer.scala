@@ -92,7 +92,7 @@ object ArrowDeserializers {
       encoder: AgnosticEncoder[_],
       data: AnyRef,
       timeZoneId: String): Deserializer[Any] = {
-    (encoder, data) match {
+    (unwrapNullabilityOverride(encoder), data) match {
       case (PrimitiveBooleanEncoder | BoxedBooleanEncoder, v: FieldVector) =>
         new LeafFieldDeserializer[Boolean](encoder, v, timeZoneId) {
           override def value(i: Int): Boolean = reader.getBoolean(i)

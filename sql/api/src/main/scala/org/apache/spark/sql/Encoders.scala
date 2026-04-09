@@ -341,6 +341,14 @@ object Encoders {
   def product[T <: Product: TypeTag]: Encoder[T] = ScalaReflection.encoderFor[T]
 
   /**
+   * An encoder for Scala's product type (tuples, case classes, etc) that derives nullability from
+   * Scala types. Only fields wrapped in [[scala.Option]] are marked nullable; non-optional fields
+   * are encoded as non-nullable and reject unexpected nulls at runtime.
+   * @since 4.2.0
+   */
+  def strictProduct[T <: Product: TypeTag]: Encoder[T] = ScalaReflection.strictEncoderFor[T]
+
+  /**
    * An encoder for Scala's primitive int type.
    * @since 2.0.0
    */
